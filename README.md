@@ -53,5 +53,10 @@ Minimal backend for Desicode (Python, SQLAlchemy, Alembic).
 - Follow existing code style.
 - Run migrations and seed data locally before creating PRs that touch models or DB schemas.
 
+## Developer Guide
+
+- See the developer guide: [DevelopersGuide.md](./DevelopersGuide.md)
+
+
 ## License
-- Add project license information here.
+- Rakesh Kumar Dash
