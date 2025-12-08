@@ -31,12 +31,6 @@ From the repository root, install main requirements:
 ```bash
 python -m pip install -r aspy_backend/requirements.txt
 ```
-
-Install test and dev tools (if not already included):
-```bash
-python -m pip install pytest requests python-jose
-```
-
 ## Environment variables
 Create a `.env` file at the repo root or set environment variables in your shell. Minimum variables required:
 
