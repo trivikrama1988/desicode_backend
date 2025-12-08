@@ -75,14 +75,10 @@ Confirm the server is running:
 ## Run tests
 The `aspy_backend/tests/` folder contains several test utilities:
 
-### Run all tests with `pytest`
-```bash
-pytest -q
-```
 
 ### Run specific test file
 ```bash
-pytest -q aspy_backend/tests/test_auth.py
+python aspy_backend/tests/test_auth.py
 ```
 
 ### Available test utilities
