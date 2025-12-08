@@ -1,6 +1,5 @@
 Here is the updated `README.md` with details matching your actual project structure:
 
-```markdown
 # DesiCode Backend
 
 ## Overview
