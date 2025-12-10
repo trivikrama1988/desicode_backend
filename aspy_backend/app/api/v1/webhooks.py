@@ -12,16 +12,18 @@ from app.models.user import User
 from app.models.subscription import Subscription, SubscriptionStatus, Plan
 from app.models.invoice import Invoice
 
-router = APIRouter(tags=["Webhooks"])
+router = APIRouter()
 
 stripe_webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 razorpay_webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 
-@router.post("/webhooks/stripe")
+
+@router.post("/webhooks/stripe", tags=["Webhooks"])
 async def stripe_webhook(
-    request: Request,
-    db: Session = Depends(get_db)
+        request: Request,
+        db: Session = Depends(get_db)
 ):
+    """Handle Stripe webhook events"""
     payload = await request.body()
     sig_header = request.headers.get('stripe-signature')
 
@@ -47,32 +49,43 @@ async def stripe_webhook(
                 user_id=user.id,
                 plan_id=plan.id,
                 status=SubscriptionStatus.ACTIVE,
-                stripe_subscription_id=session.get('subscription')
+                stripe_subscription_id=session.get('subscription'),
+                stripe_customer_id=session.get('customer'),
+                current_period_start=datetime.utcnow(),
+                current_period_end=datetime.utcnow()  # Will be updated by invoice.paid
             )
             db.add(subscription)
             db.commit()
 
-            invoice = Invoice(
-                user_id=user.id,
-                subscription_id=subscription.id,
-                amount=plan.price / 100,
-                currency=plan.currency,
-                status='paid',
-                stripe_invoice_id=session.get('invoice'),
-                paid_at=datetime.utcnow()
-            )
-            db.add(invoice)
-            db.commit()
+    elif event['type'] == 'invoice.paid':
+        invoice = event['data']['object']
+        subscription_id = invoice.get('subscription')
+
+        if subscription_id:
+            # Update subscription period
+            subscription = db.query(Subscription).filter(
+                Subscription.stripe_subscription_id == subscription_id
+            ).first()
+
+            if subscription:
+                subscription.current_period_start = datetime.fromtimestamp(invoice['period_start'])
+                subscription.current_period_end = datetime.fromtimestamp(invoice['period_end'])
+                db.commit()
 
     return {"status": "success"}
 
-@router.post("/webhooks/razorpay")
+
+@router.post("/webhooks/razorpay", tags=["Webhooks"])
 async def razorpay_webhook(
-    request: Request,
-    db: Session = Depends(get_db)
+        request: Request,
+        db: Session = Depends(get_db)
 ):
+    """Handle Razorpay webhook events"""
     payload = await request.body()
     sig_header = request.headers.get('x-razorpay-signature')
+
+    if not razorpay_webhook_secret:
+        raise HTTPException(status_code=500, detail="Webhook secret not configured")
 
     expected_signature = hmac.new(
         razorpay_webhook_secret.encode('utf-8'),
@@ -100,7 +113,9 @@ async def razorpay_webhook(
                     user_id=user.id,
                     plan_id=plan.id,
                     status=SubscriptionStatus.ACTIVE,
-                    razorpay_subscription_id=payment.get('subscription_id')
+                    razorpay_payment_id=payment['id'],
+                    current_period_start=datetime.utcnow(),
+                    current_period_end=datetime.utcnow()
                 )
                 db.add(subscription)
                 db.commit()

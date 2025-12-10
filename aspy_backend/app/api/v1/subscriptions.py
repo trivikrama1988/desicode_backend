@@ -9,26 +9,34 @@ from app.schemas.subscription import (
     Plan as PlanSchema
 )
 from app.core.security import get_current_user
-from datetime import datetime
+from datetime import datetime, timedelta
 
-router = APIRouter(tags=["Subscriptions"])
+router = APIRouter()
 
-@router.get("/subscriptions", response_model=List[SubscriptionSchema])
+@router.get("/plans", response_model=List[PlanSchema], tags=["Plans"])
+def get_available_plans(db: Session = Depends(get_db)):
+    """Get all available subscription plans"""
+    plans = db.query(Plan).all()
+    return plans
+
+@router.get("/subscriptions", response_model=List[SubscriptionSchema], tags=["Subscriptions"])
 def get_user_subscriptions(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)  # Get user from token
+    current_user = Depends(get_current_user)
 ):
+    """Get current user's subscriptions"""
     subscriptions = db.query(Subscription).filter(
         Subscription.user_id == current_user.id
     ).all()
     return subscriptions
 
-@router.get("/subscriptions/{subscription_id}", response_model=SubscriptionSchema)
+@router.get("/subscriptions/{subscription_id}", response_model=SubscriptionSchema, tags=["Subscriptions"])
 def get_subscription_details(
     subscription_id: int,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """Get details of a specific subscription"""
     subscription = db.query(Subscription).filter(
         Subscription.id == subscription_id,
         Subscription.user_id == current_user.id
@@ -39,12 +47,13 @@ def get_subscription_details(
 
     return subscription
 
-@router.post("/subscriptions/create", response_model=SubscriptionSchema)
+@router.post("/subscriptions", response_model=SubscriptionSchema, tags=["Subscriptions"])
 def create_subscription(
     subscription_data: SubscriptionCreate,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """Create a new subscription"""
     plan = db.query(Plan).filter(Plan.id == subscription_data.plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
@@ -57,12 +66,17 @@ def create_subscription(
     if existing:
         raise HTTPException(status_code=400, detail="User already has active subscription")
 
+    # Set period end to 30 days from now
+    period_start = datetime.utcnow()
+    period_end = period_start + timedelta(days=30)
+
     subscription = Subscription(
         user_id=current_user.id,
         plan_id=subscription_data.plan_id,
         status=SubscriptionStatus.ACTIVE,
-        current_period_start=datetime.utcnow(),
-        current_period_end=datetime.utcnow()
+        current_period_start=period_start,
+        current_period_end=period_end,
+        created_at=datetime.utcnow()
     )
 
     db.add(subscription)
@@ -71,12 +85,13 @@ def create_subscription(
 
     return subscription
 
-@router.put("/subscriptions/{subscription_id}/cancel", response_model=SubscriptionSchema)
+@router.put("/subscriptions/{subscription_id}/cancel", response_model=SubscriptionSchema, tags=["Subscriptions"])
 def cancel_subscription(
     subscription_id: int,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """Cancel an active subscription"""
     subscription = db.query(Subscription).filter(
         Subscription.id == subscription_id,
         Subscription.user_id == current_user.id
@@ -95,8 +110,3 @@ def cancel_subscription(
     db.refresh(subscription)
 
     return subscription
-
-@router.get("/plans", response_model=List[PlanSchema])
-def get_available_plans(db: Session = Depends(get_db)):
-    plans = db.query(Plan).all()
-    return plans
