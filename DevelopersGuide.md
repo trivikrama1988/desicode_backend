@@ -137,17 +137,17 @@ Use curl or Postman to test:
 ### Using curl:
 ```
 # Register
-curl -X POST http://localhost:8000/api/v1/auth/register \
+curl -X POST http://localhost:8000/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"username":"testuser","email":"test@test.com","password":"Test123!"}'
 
 # Login
-curl -X POST http://localhost:8000/api/v1/auth/login \
+curl -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@test.com","password":"Test123!"}'
 
 # Get current user (with token)
-curl -X GET http://localhost:8000/api/v1/auth/me \
+curl -X GET http://localhost:8000/api/auth/me \
   -H "Authorization: Bearer YOUR_TOKEN_HERE"
 ```
 

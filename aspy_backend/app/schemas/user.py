@@ -22,5 +22,6 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 class UserProfileUpdate(BaseModel):
-    username: str
-    email: EmailStr
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None

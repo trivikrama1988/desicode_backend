@@ -1,16 +1,24 @@
+# app/api/v1/payments.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 import stripe
-import razorpay
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 
-from app.db.session import get_db
-from app.models.subscription import Plan, Subscription, SubscriptionStatus
-from app.models.invoice import Invoice
-from app.schemas.payment import (
+# Lazy import for razorpay to avoid syntax errors
+razorpay = None
+try:
+    import razorpay
+except ImportError:
+    razorpay = None
+
+from ....db.session import get_db
+from ....models.user import User
+from ....models.subscription import Plan, Subscription, SubscriptionStatus
+from ....models.invoice import Invoice
+from ....schemas.payment import (
     StripeCheckoutRequest,
     StripeCheckoutResponse,
     RazorpayOrderRequest,
@@ -18,7 +26,7 @@ from app.schemas.payment import (
     RazorpayVerifyRequest,
     PaymentHistory
 )
-from app.core.security import get_current_user
+from ...security import get_current_user
 
 router = APIRouter()
 
@@ -29,41 +37,13 @@ razorpay_client = razorpay.Client(
 )
 
 
-def format_plan_features(plan: Plan) -> str:
-    """Format plan features for display"""
-    try:
-        if isinstance(plan.features, str):
-            features_dict = json.loads(plan.features)
-        else:
-            features_dict = plan.features or {}
-
-        features_list = []
-        for key, value in features_dict.items():
-            key_formatted = key.replace('_', ' ').title()
-            if isinstance(value, bool):
-                features_list.append(f"{key_formatted}: {'Yes' if value else 'No'}")
-            elif isinstance(value, (int, float)):
-                features_list.append(f"{key_formatted}: {value}")
-            else:
-                features_list.append(f"{key_formatted}: {value}")
-
-        return " | ".join(features_list)
-    except:
-        return "View features for details"
-
-
 @router.post("/payments/stripe/create-checkout", response_model=StripeCheckoutResponse, tags=["Payments"])
 def create_stripe_checkout(
         request: StripeCheckoutRequest,
         db: Session = Depends(get_db),
-        current_user=Depends(get_current_user)
+        current_user: User = Depends(get_current_user)
 ):
-    """
-    Create Stripe checkout session for subscription
-
-    Note: Your plan prices are stored in paise (INR cents).
-    Stripe expects amounts in the smallest currency unit.
-    """
+    """Create Stripe checkout session for subscription - BACKEND CONTROLLED"""
     # Get the plan
     plan = db.query(Plan).filter(Plan.id == request.plan_id).first()
     if not plan:
@@ -80,33 +60,37 @@ def create_stripe_checkout(
 
     try:
         # Create or retrieve Stripe customer
-        customer = stripe.Customer.create(
-            email=current_user.email,
-            name=current_user.username,
-            metadata={
-                "user_id": current_user.id,
-                "username": current_user.username
-            }
-        )
+        customer = None
+        if current_user.stripe_customer_id:
+            try:
+                customer = stripe.Customer.retrieve(current_user.stripe_customer_id)
+            except stripe.error.InvalidRequestError:
+                customer = None
+
+        if not customer:
+            customer = stripe.Customer.create(
+                email=current_user.email,
+                name=current_user.username,
+                metadata={
+                    "user_id": str(current_user.id),
+                    "username": current_user.username
+                }
+            )
+            # Update user with stripe customer id
+            current_user.stripe_customer_id = customer.id
+            db.commit()
 
         # Determine unit amount for Stripe
-        # Stripe expects amount in smallest currency unit
         currency = plan.currency.upper()
 
         if currency == "INR":
-            # Your prices are already in paise, use as-is
-            unit_amount = plan.price
-        elif currency in ["USD", "EUR", "GBP"]:
-            # Convert to cents (assuming price is in dollars/euros)
+            # Price is in rupees, convert to paise
             unit_amount = int(plan.price * 100)
         else:
-            # Default: assume price is already in smallest unit
-            unit_amount = plan.price
+            # For USD/EUR, price is in dollars/euros, convert to cents
+            unit_amount = int(plan.price * 100)
 
-        # Format features for product description
-        features_description = format_plan_features(plan)
-
-        # Create Stripe checkout session
+        # Create Stripe checkout session - BACKEND CONTROLLED
         session = stripe.checkout.Session.create(
             customer=customer.id,
             payment_method_types=['card'],
@@ -115,23 +99,23 @@ def create_stripe_checkout(
                     'currency': currency.lower(),
                     'product_data': {
                         'name': plan.name,
-                        'description': features_description,
+                        'description': f"{plan.type.value.capitalize()} Plan",
                         'metadata': {
                             'plan_id': str(plan.id),
-                            'plan_type': plan.type
+                            'plan_type': plan.type.value
                         }
                     },
                     'unit_amount': unit_amount,
                     'recurring': {
                         'interval': 'month',
                         'interval_count': 1
-                    },
+                    } if plan.type.value != "free" else None,
                 },
                 'quantity': 1,
             }],
-            mode='subscription',
-            success_url=request.success_url or "http://localhost:3000/success",
-            cancel_url=request.cancel_url or "http://localhost:3000/cancel",
+            mode='subscription' if plan.type.value != "free" else 'payment',
+            success_url=request.success_url,
+            cancel_url=request.cancel_url,
             metadata={
                 'user_id': str(current_user.id),
                 'plan_id': str(plan.id),
@@ -143,21 +127,25 @@ def create_stripe_checkout(
                     'user_id': str(current_user.id),
                     'plan_id': str(plan.id)
                 }
-            },
-            billing_address_collection='required' if plan.price > 0 else 'auto',
-            allow_promotion_codes=True
+            } if plan.type.value != "free" else None,
+            payment_intent_data={
+                'metadata': {
+                    'user_id': str(current_user.id),
+                    'plan_id': str(plan.id)
+                }
+            } if plan.type.value == "free" else None,
         )
 
         # Create pending invoice record
         invoice = Invoice(
             user_id=current_user.id,
-            amount=plan.price / 100 if currency == "INR" else plan.price,  # Convert to main currency unit
+            plan_id=plan.id,
+            amount=plan.price,
             currency=currency,
             status='pending',
             stripe_session_id=session.id,
             stripe_customer_id=customer.id,
-            plan_id=plan.id,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
 
         db.add(invoice)
@@ -178,14 +166,9 @@ def create_stripe_checkout(
 def create_razorpay_order(
         request: RazorpayOrderRequest,
         db: Session = Depends(get_db),
-        current_user=Depends(get_current_user)
+        current_user: User = Depends(get_current_user)
 ):
-    """
-    Create Razorpay order for payment
-
-    Note: Your plan prices are stored in paise (INR cents).
-    Razorpay expects amounts in paise for INR.
-    """
+    """Create Razorpay order for payment - BACKEND CONTROLLED"""
     # Get the plan
     plan = db.query(Plan).filter(Plan.id == request.plan_id).first()
     if not plan:
@@ -211,18 +194,13 @@ def create_razorpay_order(
         raise HTTPException(status_code=400, detail="User already has an active subscription")
 
     try:
-        # Your prices are already in paise for INR, which is perfect for Razorpay
-        # For other currencies, ensure they're in smallest unit
-        if requested_currency == "INR":
-            amount = plan.price  # Already in paise
-        else:
-            # For other currencies, assume price is in main unit and convert to smallest
-            amount = int(plan.price * 100)
+        # Convert to paise (smallest currency unit for INR)
+        amount = int(plan.price * 100)  # Convert rupees to paise
 
         # Create order data
         order_data = {
             'amount': amount,
-            'currency': requested_currency,
+            'currency': requested_currency.lower(),
             'receipt': f'order_{current_user.id}_{int(datetime.now().timestamp())}',
             'notes': {
                 'user_id': str(current_user.id),
@@ -240,12 +218,12 @@ def create_razorpay_order(
         # Create pending invoice record
         invoice = Invoice(
             user_id=current_user.id,
-            amount=amount / 100 if requested_currency == "INR" else amount / 100,  # Convert to main currency unit
+            plan_id=plan.id,
+            amount=plan.price,  # Store in main currency unit
             currency=requested_currency,
             status='pending',
             razorpay_order_id=order['id'],
-            plan_id=plan.id,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
 
         db.add(invoice)
@@ -268,11 +246,9 @@ def create_razorpay_order(
 def verify_razorpay_payment(
         request: RazorpayVerifyRequest,
         db: Session = Depends(get_db),
-        current_user=Depends(get_current_user)
+        current_user: User = Depends(get_current_user)
 ):
-    """
-    Verify Razorpay payment signature and process payment
-    """
+    """Verify Razorpay payment signature and process payment - BACKEND ONLY"""
     try:
         # Verify payment signature
         params_dict = {
@@ -300,7 +276,7 @@ def verify_razorpay_payment(
         # Update invoice with payment details
         invoice.status = 'paid'
         invoice.razorpay_payment_id = request.razorpay_payment_id
-        invoice.paid_at = datetime.utcnow()
+        invoice.paid_at = datetime.now(timezone.utc)
         invoice.amount = float(order['amount']) / 100  # Convert paise to rupees
 
         # Get plan from invoice
@@ -315,7 +291,7 @@ def verify_razorpay_payment(
 
             if not subscription:
                 # Create new subscription
-                period_start = datetime.utcnow()
+                period_start = datetime.now(timezone.utc)
                 period_end = period_start + timedelta(days=30)  # Monthly subscription
 
                 subscription = Subscription(
@@ -326,16 +302,18 @@ def verify_razorpay_payment(
                     current_period_end=period_end,
                     razorpay_payment_id=request.razorpay_payment_id,
                     razorpay_order_id=request.razorpay_order_id,
-                    created_at=datetime.utcnow()
+                    created_at=datetime.now(timezone.utc)
                 )
                 db.add(subscription)
+                invoice.subscription_id = subscription.id
             else:
                 # Renew existing subscription
                 subscription.status = SubscriptionStatus.ACTIVE
-                subscription.current_period_start = datetime.utcnow()
-                subscription.current_period_end = datetime.utcnow() + timedelta(days=30)
+                subscription.current_period_start = datetime.now(timezone.utc)
+                subscription.current_period_end = datetime.now(timezone.utc) + timedelta(days=30)
                 subscription.razorpay_payment_id = request.razorpay_payment_id
                 subscription.razorpay_order_id = request.razorpay_order_id
+                invoice.subscription_id = subscription.id
 
         db.commit()
 
@@ -345,7 +323,8 @@ def verify_razorpay_payment(
             "payment_id": request.razorpay_payment_id,
             "order_id": request.razorpay_order_id,
             "amount": invoice.amount,
-            "currency": invoice.currency
+            "currency": invoice.currency,
+            "subscription_created": True if plan else False
         }
 
     except razorpay.errors.SignatureVerificationError:
@@ -359,11 +338,9 @@ def verify_razorpay_payment(
 @router.get("/payments/history", response_model=List[PaymentHistory], tags=["Payments"])
 def get_payment_history(
         db: Session = Depends(get_db),
-        current_user=Depends(get_current_user)
+        current_user: User = Depends(get_current_user)
 ):
-    """
-    Get payment history for current user
-    """
+    """Get payment history for current user"""
     invoices = db.query(Invoice).filter(
         Invoice.user_id == current_user.id
     ).order_by(Invoice.created_at.desc()).all()
@@ -402,9 +379,7 @@ def get_payment_history(
 
 @router.get("/payments/methods", tags=["Payments"])
 def get_payment_methods():
-    """
-    Get available payment methods
-    """
+    """Get available payment methods - BACKEND CONTROLLED"""
     return {
         "available_methods": [
             {

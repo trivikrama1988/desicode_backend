@@ -1,8 +1,9 @@
-# app/models/user.py - CORRECT VERSION
+# app/models/user.py
 from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -18,5 +19,13 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
+    # New fields for execution tracking
+    total_code_executions = Column(Integer, default=0)
+    last_execution_at = Column(DateTime, nullable=True)
+    preferred_language = Column(String(50), nullable=True, default="assamese")
+    webhook_url = Column(String(500), nullable=True)  # URL to send job completion webhooks
+
     subscriptions = relationship("Subscription", back_populates="user")
     invoices = relationship("Invoice", back_populates="user")
+    # FIX: Added this line
+    executions = relationship("CodeExecution", back_populates="user")

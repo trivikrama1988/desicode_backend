@@ -1,0 +1,94 @@
+TOTAL APIS: 15-18 APIs
+
+BREAKDOWN:
+
+1. AUTHENTICATION (3 APIs)
+ POST /api/auth/register - User registration
+ POST /api/auth/login - User login
+ GET /api/auth/me - Get current user
+
+2. SUBSCRIPTION MANAGEMENT (5 APIs)
+ GET /api/subscriptions - Get user's subscriptions
+ GET /api/subscriptions/{id} - Get subscription details
+ POST /api/subscriptions/create - Create new subscription
+  PUT /api/subscriptions/{id}/cancel - Cancel subscription
+  GET /api/plans - Get available plans (Free/Pro/Team/Campus)
+
+3. PAYMENT PROCESSING (4 APIs)
+ POST /api/payments/stripe/create-checkout - Stripe checkout session
+ POST /api/payments/razorpay/create-order - Razorpay order creation
+ POST /api/payments/razorpay/verify - Razorpay payment verification
+  GET /api/payments/history - Payment transaction history
+
+4. WEBHOOKS (2 APIs)
+  POST /api/webhooks/stripe - Stripe payment notifications
+  POST /api/webhooks/razorpay - Razorpay payment notifications
+
+5. BILLING & INVOICES (3 APIs)
+  GET /api/billing/invoices - Get user invoices
+  GET /api/billing/invoices/{id} - Download invoice
+  GET /api/billing/usage - Get usage statistics
+
+6. USER PROFILE (2 APIs)
+  GET /api/users/profile - Get user profile
+ PUT /api/users/profile - Update user profile
+
+
+
+1 :
+- Complete VS Code Extension
+- Setup + Database + Auth APIs
+
+ 2 :
+- Subscription APIs
+- Stripe Integration
+
+ 3:
+- Razorpay Integration
+- Webhooks + Billing APIs
+
+
+- Testing + Documentation
+
+front end Web https://desicodes.vercel.app/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+complete_code\desicodes_payment_api\app\api\routes\transpiler.py
+this is where run api resides
+
+API_BASE = hosted url
+Endpoint: POST ${API_BASE}/api/v1/run
+Request body: { code: "...", language: "assamese", timeout: 5 }
+
+EXAMPLE:---> Tested in swagger with below input
+
+{
+  "code": "# নমস্কাৰ পৃথিৱী\nপ্ৰিন্ট(\"নমস্কাৰ পৃথিৱী!\")\nপ্ৰিন্ট(\"স্বাগতম অসমীয়া প্ৰগ্ৰামিং ভাষালৈ\")",
+  "language": "assamese",
+  "timeout": 5
+}
+
+
+Response body got in swagger:
+{ "success": true, "transpiled_code": null, "output": "==================================================\r\nTranspiled Python Code:\r\n==================================================\r\n# নমস্কাৰ পৃথিৱী\r\nprint(\"নমস্কাৰ পৃথিৱী!\")\r\nprint(\"স্বাগতম অসমীয়া প্ৰগ্ৰামিং ভাষালৈ\")\r\n==================================================\r\n\r\n>>> Executing...\r\n--------------------------------------------------\r\nনমস্কাৰ পৃথিৱী!\r\nস্বাগতম অসমীয়া প্ৰগ্ৰামিং ভাষালৈ\r\n\r\n--------------------------------------------------\r\nExecution completed successfully\r\n", "errors": null }

@@ -1,21 +1,19 @@
 import requests
-import json
 import time
-import sys
 import os
 from datetime import datetime
+import pytest
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://localhost:8000")
 TEST_USER = {}
-ACCESS_TOKEN = None
 
 
 def print_test_result(name, success, response=None):
     """Print test result with color coding"""
     if success:
-        print(f"✅ {name}: PASSED")
+        print(f"{name}: PASSED")
     else:
-        print(f"❌ {name}: FAILED")
+        print(f"{name}: FAILED")
         if response:
             print(f"   Status: {response.status_code}")
             print(f"   Error: {response.text[:200]}")
@@ -23,51 +21,40 @@ def print_test_result(name, success, response=None):
 
 def test_health():
     """Test health endpoint"""
-    print("\n🔍 Testing Health Endpoint")
+    print("\nTesting Health Endpoint")
     print("-" * 40)
 
     try:
         response = requests.get(f"{BASE_URL}/health", timeout=5)
         success = response.status_code == 200 and response.json().get("status") == "healthy"
         print_test_result("Health Check", success, response)
-        return success
+        assert success, f"Health check failed: {response.status_code} {response.text}"
     except Exception as e:
-        print(f"❌ Health Check Error: {e}")
-        return False
+        pytest.fail(f"Health Check Error: {e}")
 
 
 def test_get_plans():
     """Test getting subscription plans"""
-    print("\n📋 Testing Plans Endpoint")
+    print("\nTesting Plans Endpoint")
     print("-" * 40)
 
     try:
-        response = requests.get(f"{BASE_URL}/api/v1/plans", timeout=10)
+        response = requests.get(f"{BASE_URL}/api/plans", timeout=10)
 
-        if response.status_code == 200:
-            try:
-                plans = response.json()
-                print(f"✅ Found {len(plans)} plans:")
-                for plan in plans:
-                    print(f"   • {plan.get('name', 'Unknown')}: ₹{plan.get('price', 0) / 100}")
-                return True
-            except json.JSONDecodeError:
-                print(f"❌ Invalid JSON response from /plans")
-                print(f"   Response: {response.text[:200]}")
-                return False
-        else:
-            print(f"❌ Plans endpoint returned status: {response.status_code}")
-            print(f"   Response: {response.text[:200]}")
-            return False
+        assert response.status_code == 200, f"Plans endpoint returned status: {response.status_code} - {response.text}"
+
+        plans = response.json()
+        print(f"Found {len(plans)} plans:")
+        for plan in plans:
+            print(f"   - {plan.get('name', 'Unknown')}: ${plan.get('price', 0) / 100}")
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Error connecting to plans endpoint: {e}")
-        return False
+        pytest.fail(f"Error connecting to plans endpoint: {e}")
 
 
 def test_register_user():
     """Test user registration"""
-    print("\n👤 Testing User Registration")
+    print("\nTesting User Registration")
     print("-" * 40)
 
     # Generate unique test user
@@ -80,29 +67,23 @@ def test_register_user():
 
     try:
         response = requests.post(
-            f"{BASE_URL}/api/v1/auth/register",
+            f"{BASE_URL}/api/auth/register",
             json=TEST_USER,
             timeout=10
         )
 
-        success = response.status_code == 201
-        if success:
-            print(f"✅ User registered: {TEST_USER['email']}")
-            user_data = response.json()
-            TEST_USER['id'] = user_data.get('id')
-            return True
-        else:
-            print_test_result("User Registration", success, response)
-            return False
+        assert response.status_code == 201, f"User registration failed: {response.status_code} {response.text}"
+        user_data = response.json()
+        TEST_USER['id'] = user_data.get('id')
+        print(f"User registered: {TEST_USER['email']}")
 
     except Exception as e:
-        print(f"❌ Registration Error: {e}")
-        return False
+        pytest.fail(f"Registration Error: {e}")
 
 
 def test_login():
     """Test user login"""
-    print("\n🔐 Testing User Login")
+    print("\nTesting User Login")
     print("-" * 40)
 
     login_data = {
@@ -112,224 +93,160 @@ def test_login():
 
     try:
         response = requests.post(
-            f"{BASE_URL}/api/v1/auth/login",
+            f"{BASE_URL}/api/auth/login",
             json=login_data,
             timeout=10
         )
 
-        success = response.status_code == 200
-        if success:
-            data = response.json()
-            global ACCESS_TOKEN
-            ACCESS_TOKEN = data["access_token"]
-            print(f"✅ Login successful")
-            print(f"   Token: {ACCESS_TOKEN[:50]}...")
-            print(f"   User ID: {data['user']['id']}")
-            return True
-        else:
-            print_test_result("User Login", success, response)
-            return False
+        assert response.status_code == 200, f"Login failed: {response.status_code} {response.text}"
+        data = response.json()
+        token = data["access_token"]
+        print(f"Login successful")
+        print(f"   Token: {token[:50]}...")
+        print(f"   User ID: {data['user']['id']}")
+
+        return token
 
     except Exception as e:
-        print(f"❌ Login Error: {e}")
-        return False
+        pytest.fail(f"Login Error: {e}")
 
 
-def test_get_current_user():
+def test_get_current_user(token):
     """Test getting current user info"""
-    print("\n👤 Testing Get Current User")
+    print("\nTesting Get Current User")
     print("-" * 40)
 
-    if not ACCESS_TOKEN:
-        print("❌ No access token available")
-        return False
+    assert token, "No access token available from fixture"
 
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
+    headers = {"Authorization": f"Bearer {token}"}
 
     try:
         response = requests.get(
-            f"{BASE_URL}/api/v1/auth/me",
+            f"{BASE_URL}/api/auth/me",
             headers=headers,
             timeout=10
         )
 
-        success = response.status_code == 200
-        print_test_result("Get Current User", success, response)
-        if success:
-            user_data = response.json()
-            print(f"   User: {user_data.get('username', 'Unknown')}")
-        return success
+        assert response.status_code == 200, f"Get Current User failed: {response.status_code} {response.text}"
+        user_data = response.json()
+        print(f"   User: {user_data.get('username', 'Unknown')}")
 
     except Exception as e:
-        print(f"❌ Get Current User Error: {e}")
-        return False
+        pytest.fail(f"Get Current User Error: {e}")
 
 
-def test_update_profile():
+def test_update_profile(token):
     """Test updating user profile"""
-    print("\n✏️ Testing Update Profile")
+    print("\nTesting Update Profile")
     print("-" * 40)
 
-    if not ACCESS_TOKEN:
-        print("❌ No access token available")
-        return False
+    assert token, "No access token available from fixture"
 
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
+    headers = {"Authorization": f"Bearer {token}"}
     update_data = {
-        "username": f"updated_{TEST_USER['username']}",
-        "email": f"updated_{TEST_USER['email']}"
+        "username": f"updated_{int(time.time())}",
+        "email": f"updated_{int(time.time())}@desicodes.com"
     }
 
     try:
         response = requests.put(
-            f"{BASE_URL}/api/v1/users/profile",
+            f"{BASE_URL}/api/users/profile",
             json=update_data,
             headers=headers,
             timeout=10
         )
 
-        success = response.status_code == 200
-        print_test_result("Update Profile", success, response)
-        if success:
-            user_data = response.json()
-            print(f"   Updated to: {user_data.get('username', 'Unknown')}")
-        return success
+        assert response.status_code == 200, f"Update Profile failed: {response.status_code} {response.text}"
+        user_data = response.json()
+        print(f"   Updated to: {user_data.get('username', 'Unknown')}")
 
     except Exception as e:
-        print(f"❌ Update Profile Error: {e}")
-        return False
+        pytest.fail(f"Update Profile Error: {e}")
 
 
-def test_get_subscriptions():
+def test_get_subscriptions(token):
     """Test getting user subscriptions"""
-    print("\n📊 Testing Get Subscriptions")
+    print("\nTesting Get Subscriptions")
     print("-" * 40)
 
-    if not ACCESS_TOKEN:
-        print("❌ No access token available")
-        return False
+    assert token, "No access token available from fixture"
 
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
+    headers = {"Authorization": f"Bearer {token}"}
 
     try:
         response = requests.get(
-            f"{BASE_URL}/api/v1/subscriptions",
+            f"{BASE_URL}/api/subscriptions",
             headers=headers,
             timeout=10
         )
 
-        success = response.status_code == 200
-        print_test_result("Get Subscriptions", success, response)
-        if success:
-            try:
-                subscriptions = response.json()
-                print(f"   Found {len(subscriptions)} subscriptions")
-            except:
-                print(f"   Could not parse subscriptions response")
-        return success
+        assert response.status_code == 200, f"Get Subscriptions failed: {response.status_code} {response.text}"
+        subscriptions = response.json()
+        print(f"   Found {len(subscriptions)} subscriptions")
 
     except Exception as e:
-        print(f"❌ Get Subscriptions Error: {e}")
-        return False
+        pytest.fail(f"Get Subscriptions Error: {e}")
 
 
-def test_create_subscription():
+def test_create_subscription(token):
     """Test creating a subscription"""
-    print("\n🛒 Testing Create Subscription")
+    print("\nTesting Create Subscription")
     print("-" * 40)
 
-    if not ACCESS_TOKEN:
-        print("❌ No access token available")
-        return False
+    assert token, "No access token available from fixture"
 
     try:
-        # First get available plans with better error handling
-        plans_response = requests.get(f"{BASE_URL}/api/v1/plans", timeout=10)
+        plans_response = requests.get(f"{BASE_URL}/api/plans", timeout=10)
+        assert plans_response.status_code == 200, f"Cannot get plans: {plans_response.status_code} {plans_response.text}"
+        plans = plans_response.json()
+        assert plans, "No plans available"
 
-        if plans_response.status_code != 200:
-            print(f"❌ Cannot get plans: Status {plans_response.status_code}")
-            print(f"   Response: {plans_response.text[:200]}")
-            return False
-
-        try:
-            plans = plans_response.json()
-        except json.JSONDecodeError:
-            print(f"❌ Cannot parse plans response as JSON")
-            print(f"   Response: {plans_response.text[:200]}")
-            return False
-
-        if not plans:
-            print("❌ No plans available")
-            return False
-
-        # Use the first plan available
         plan_id = plans[0]["id"]
 
-        headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
-        subscription_data = {
-            "plan_id": plan_id
-        }
+        headers = {"Authorization": f"Bearer {token}"}
+        subscription_data = {"plan_id": plan_id}
 
         response = requests.post(
-            f"{BASE_URL}/api/v1/subscriptions/create",
+            f"{BASE_URL}/api/subscriptions/create",
             json=subscription_data,
             headers=headers,
             timeout=10
         )
 
-        success = response.status_code in [200, 400]  # 400 if already subscribed
-        if success and response.status_code == 200:
-            print(f"✅ Subscribed to plan ID: {plan_id}")
-        elif response.status_code == 400:
-            print(f"⚠️ Note: {response.json().get('detail', 'Already subscribed')}")
-        else:
-            print(f"❌ Create subscription failed: Status {response.status_code}")
-            print(f"   Response: {response.text[:200]}")
-
-        return success
+        success = response.status_code in [200, 400]
+        assert success, f"Create subscription failed: {response.status_code} {response.text}"
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Network error during create subscription: {e}")
-        return False
+        pytest.fail(f"Network error during create subscription: {e}")
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-        return False
+        pytest.fail(f"Unexpected error: {e}")
 
 
-def test_payment_endpoints():
+def test_payment_endpoints(token):
     """Test payment endpoints (won't process real payments)"""
-    print("\n💰 Testing Payment Endpoints")
+    print("\nTesting Payment Endpoints")
     print("-" * 40)
 
-    if not ACCESS_TOKEN:
-        print("❌ No access token available")
-        return False
+    assert token, "No access token available from fixture"
 
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
+    headers = {"Authorization": f"Bearer {token}"}
 
     # Test 1: Get payment history
     try:
         response = requests.get(
-            f"{BASE_URL}/api/v1/payments/history",
+            f"{BASE_URL}/api/payments/history",
             headers=headers,
             timeout=10
         )
 
         success1 = response.status_code == 200
         print_test_result("Get Payment History", success1, response)
-        if success1:
-            try:
-                history = response.json()
-                print(f"   Found {len(history)} payment records")
-            except:
-                print(f"   Could not parse payment history")
     except Exception as e:
-        print(f"❌ Payment History Error: {e}")
-        success1 = False
+        pytest.fail(f"Payment History Error: {e}")
 
     # Test 2: Try to create Stripe checkout (will likely fail without keys)
     try:
-        plans_response = requests.get(f"{BASE_URL}/api/v1/plans")
+        plans_response = requests.get(f"{BASE_URL}/api/plans")
         if plans_response.status_code == 200:
             plans = plans_response.json()
             plan_id = plans[1]["id"] if len(plans) > 1 else 2
@@ -341,7 +258,7 @@ def test_payment_endpoints():
             }
 
             response = requests.post(
-                f"{BASE_URL}/api/v1/payments/stripe/create-checkout",
+                f"{BASE_URL}/api/payments/stripe/create-checkout",
                 json=stripe_data,
                 headers=headers,
                 timeout=10
@@ -351,65 +268,54 @@ def test_payment_endpoints():
             print_test_result("Create Stripe Checkout", success2, response)
         else:
             success2 = False
-            print("❌ Could not get plans for Stripe test")
+            print("Could not get plans for Stripe test")
     except Exception as e:
-        print(f"❌ Stripe Checkout Error: {e}")
-        success2 = False
+        pytest.fail(f"Stripe Checkout Error: {e}")
 
-    return success1 or success2  # At least one should work
+    assert success1 or success2, "Both payment tests failed"
 
 
-def test_billing_endpoints():
+def test_billing_endpoints(token):
     """Test billing endpoints"""
-    print("\n🧾 Testing Billing Endpoints")
+    print("\nTesting Billing Endpoints")
     print("-" * 40)
 
-    if not ACCESS_TOKEN:
-        print("❌ No access token available")
-        return False
+    assert token, "No access token available from fixture"
 
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
+    headers = {"Authorization": f"Bearer {token}"}
 
     # Test 1: Get invoices
     try:
         response = requests.get(
-            f"{BASE_URL}/api/v1/billing/invoices",
+            f"{BASE_URL}/api/billing/invoices",
             headers=headers,
             timeout=10
         )
 
         success1 = response.status_code == 200
         print_test_result("Get Invoices", success1, response)
-        if success1:
-            try:
-                invoices = response.json()
-                print(f"   Found {len(invoices)} invoices")
-            except:
-                print(f"   Could not parse invoices")
     except Exception as e:
-        print(f"❌ Get Invoices Error: {e}")
-        success1 = False
+        pytest.fail(f"Get Invoices Error: {e}")
 
     # Test 2: Get usage stats
     try:
         response = requests.get(
-            f"{BASE_URL}/api/v1/billing/usage",
+            f"{BASE_URL}/api/billing/usage",
             headers=headers,
             timeout=10
         )
 
         success2 = response.status_code in [200, 404]
-        print_test_result("Get Usage Stats", success2, response)
+        print_test_result("Get Billing Usage", success2, response)
     except Exception as e:
-        print(f"❌ Get Usage Stats Error: {e}")
-        success2 = False
+        pytest.fail(f"Billing Usage Error: {e}")
 
-    return success1 or success2
+    assert success1 or success2, "Both billing tests failed"
 
 
 def test_error_handling():
     """Test error cases"""
-    print("\n⚠️ Testing Error Handling")
+    print("\nTesting Error Handling")
     print("-" * 40)
 
     tests_passed = 0
@@ -419,49 +325,49 @@ def test_error_handling():
     print("\n1. Testing Invalid Login...")
     try:
         response = requests.post(
-            f"{BASE_URL}/api/v1/auth/login",
+            f"{BASE_URL}/api/auth/login",
             json={"email": "invalid@test.com", "password": "wrong"},
             timeout=10
         )
         if response.status_code == 401:
-            print("✅ Invalid login handled correctly")
+            print("Invalid login handled correctly")
             tests_passed += 1
         else:
-            print(f"❌ Invalid login test failed (Status: {response.status_code})")
+            print(f"Invalid login test failed (Status: {response.status_code})")
     except Exception as e:
-        print(f"❌ Invalid login test error: {e}")
+        print(f"Invalid login test error: {e}")
 
     # Test 2: Access protected route without token
     print("\n2. Testing Unauthorized Access...")
     try:
-        response = requests.get(f"{BASE_URL}/api/v1/auth/me", timeout=10)
+        response = requests.get(f"{BASE_URL}/api/auth/me", timeout=10)
         if response.status_code == 401:
-            print("✅ Unauthorized access handled correctly")
+            print("Unauthorized access handled correctly")
             tests_passed += 1
         else:
-            print(f"❌ Unauthorized access test failed (Status: {response.status_code})")
+            print(f"Unauthorized access test failed (Status: {response.status_code})")
     except Exception as e:
-        print(f"❌ Unauthorized access test error: {e}")
+        print(f"Unauthorized access test error: {e}")
 
     # Test 3: Invalid token
     print("\n3. Testing Invalid Token...")
     try:
         headers = {"Authorization": "Bearer invalid_token_here"}
-        response = requests.get(f"{BASE_URL}/api/v1/auth/me", headers=headers, timeout=10)
+        response = requests.get(f"{BASE_URL}/api/auth/me", headers=headers, timeout=10)
         if response.status_code == 401:
-            print("✅ Invalid token handled correctly")
+            print("Invalid token handled correctly")
             tests_passed += 1
         else:
-            print(f"❌ Invalid token test failed (Status: {response.status_code})")
+            print(f"Invalid token test failed (Status: {response.status_code})")
     except Exception as e:
-        print(f"❌ Invalid token test error: {e}")
+        print(f"Invalid token test error: {e}")
 
-    return tests_passed >= 2  # Pass if at least 2 tests pass
+    assert tests_passed >= 2, "Error handling tests did not pass as expected"
 
 
 def run_all_tests():
     """Run all tests"""
-    print("🚀 Starting Comprehensive API Test Suite")
+    print("Starting Comprehensive API Test Suite")
     print("=" * 60)
     print(f"Base URL: {BASE_URL}")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -479,19 +385,21 @@ def run_all_tests():
     else:
         test_results["register"] = False
 
+    token = None
     if test_results.get("register"):
-        test_results["login"] = test_login()
+        token = test_login()
+        test_results["login"] = token is not None
     else:
         test_results["login"] = False
 
     # Protected endpoints (require auth)
-    if test_results.get("login"):
-        test_results["current_user"] = test_get_current_user()
-        test_results["update_profile"] = test_update_profile()
-        test_results["subscriptions"] = test_get_subscriptions()
-        test_results["create_subscription"] = test_create_subscription()
-        test_results["payments"] = test_payment_endpoints()
-        test_results["billing"] = test_billing_endpoints()
+    if test_results.get("login") and token:
+        test_results["current_user"] = test_get_current_user(token)
+        test_results["update_profile"] = test_update_profile(token)
+        test_results["subscriptions"] = test_get_subscriptions(token)
+        test_results["create_subscription"] = test_create_subscription(token)
+        test_results["payments"] = test_payment_endpoints(token)
+        test_results["billing"] = test_billing_endpoints(token)
         test_results["error_handling"] = test_error_handling()
     else:
         # Mark all protected tests as failed if login failed
@@ -505,32 +413,33 @@ def run_all_tests():
 
     # Summary
     print("\n" + "=" * 60)
-    print("📊 TEST SUMMARY")
+    print(" TEST SUMMARY")
     print("=" * 60)
 
     passed = sum(1 for result in test_results.values() if result)
     total = len(test_results)
 
     for name, result in test_results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "PASS" if result else "FAIL"
         print(f"{status} {name.replace('_', ' ').title()}")
 
     print("\n" + "=" * 60)
 
     if total > 0:
-        print(f"🎯 Total: {passed}/{total} tests passed ({passed / total * 100:.1f}%)")
+        print(f"Total: {passed}/{total} tests passed ({passed / total * 100:.1f}%)")
     else:
-        print("🎯 No tests were executed")
+        print("No tests were executed")
 
     if passed == total:
-        print("\n🎉 All tests passed! Your API is production-ready!")
+        print("\nAll tests passed! Your API is production-ready!")
     elif passed > total * 0.7:
-        print(f"\n⚠️ {passed}/{total} tests passed. Some issues need attention.")
+        print(f"\n{passed}/{total} tests passed. Some issues need attention.")
     else:
-        print(f"\n❌ Only {passed}/{total} tests passed. Major issues detected.")
+        print(f"\nOnly {passed}/{total} tests passed. Major issues detected.")
 
     return test_results
 
 
 if __name__ == "__main__":
     run_all_tests()
+

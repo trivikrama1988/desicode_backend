@@ -5,7 +5,7 @@ from datetime import datetime
 
 
 def debug_authentication():
-    print("🔍 Debugging Authentication Issues")
+    print("Debugging Authentication Issues")
     print("=" * 60)
 
     BASE_URL = "http://localhost:8000"
@@ -19,18 +19,18 @@ def debug_authentication():
     }
 
     print("\n1. Registering user...")
-    response = requests.post(f"{BASE_URL}/api/v1/auth/register", json=user_data)
+    response = requests.post(f"{BASE_URL}/api/auth/register", json=user_data)
     print(f"   Status: {response.status_code}")
 
     if response.status_code != 201:
         print(f"   Registration failed: {response.text}")
         return
 
-    print("   ✅ User created")
+    print("User created")
 
     # 2. Login
     print("\n2. Logging in...")
-    response = requests.post(f"{BASE_URL}/api/v1/auth/login", json={
+    response = requests.post(f"{BASE_URL}/api/auth/login", json={
         "email": user_data["email"],
         "password": user_data["password"]
     })
@@ -41,7 +41,7 @@ def debug_authentication():
 
     token_data = response.json()
     token = token_data["access_token"]
-    print(f"   ✅ Login successful")
+    print(f"Login successful")
     print(f"   Token: {token[:50]}...")
 
     # 3. Decode token to see contents (using jose library)
@@ -57,17 +57,17 @@ def debug_authentication():
             print(f"       ({exp_time})")
         print(f"     iat: {decoded.get('iat')}")
     except Exception as e:
-        print(f"   ❌ Cannot decode token: {e}")
+        print(f"Cannot decode token: {e}")
 
     # 4. Test each protected endpoint
     print("\n4. Testing protected endpoints...")
 
     endpoints = [
-        ("/api/v1/auth/me", "GET"),
-        ("/api/v1/subscriptions", "GET"),
-        ("/api/v1/payments/history", "GET"),
-        ("/api/v1/billing/invoices", "GET"),
-        ("/api/v1/billing/usage", "GET"),
+        ("/api/auth/me", "GET"),
+        ("/api/subscriptions", "GET"),
+        ("/api/payments/history", "GET"),
+        ("/api/billing/invoices", "GET"),
+        ("/api/billing/usage", "GET"),
     ]
 
     headers = {"Authorization": f"Bearer {token}"}
@@ -81,7 +81,7 @@ def debug_authentication():
             print(f"     Status: {response.status_code}")
 
             if response.status_code == 200:
-                print(f"     ✅ Success")
+                print(f"  Success")
                 try:
                     data = response.json()
                     if isinstance(data, list):
@@ -91,14 +91,14 @@ def debug_authentication():
                 except:
                     print(f"     Data: Could not parse JSON")
             elif response.status_code == 401:
-                print(f"     ❌ Unauthorized: {response.text}")
+                print(f"  Unauthorized: {response.text}")
             elif response.status_code == 404:
-                print(f"     ⚠️ Not found (might be normal): {response.text}")
+                print(f"Not found (might be normal): {response.text}")
             else:
-                print(f"     ❌ Error: {response.text[:200]}")
+                print(f"  Error: {response.text[:200]}")
 
         except Exception as e:
-            print(f"     ❌ Request failed: {e}")
+            print(f"  Request failed: {e}")
 
     # 5. Test token verification with SECRET_KEY
     print("\n5. Testing token verification...")
@@ -107,10 +107,10 @@ def debug_authentication():
     try:
         # Try to verify the token with jose library
         verified = jwt.decode(token, secret_key, algorithms=["HS256"])
-        print(f"   ✅ Token verified successfully with SECRET_KEY")
+        print(f"Token verified successfully with SECRET_KEY")
         print(f"   Email in token: {verified.get('sub')}")
     except JWTError as e:
-        print(f"   ❌ Token verification failed: {e}")
+        print(f"Token verification failed: {e}")
         print(f"   SECRET_KEY used: {secret_key[:20]}...")
 
     print("\n" + "=" * 60)

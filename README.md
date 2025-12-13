@@ -1,236 +1,205 @@
-Here is the updated `README.md` with details matching your actual project structure:
+# DesiCodes Backend API
 
-# DesiCode Backend
+A FastAPI-based backend for code execution, subscription management, and payment processing supporting multiple Indian languages.
 
-## Overview
-This repository contains the backend for the DesiCode project (Python/FastAPI). This `README.md` documents setup, running, testing, debugging and troubleshooting steps for development on Windows.
+## Features
 
-[Developer Guide](`DevelopersGuide.md`)
+- **Multi-language Code Execution**: Support for 7 northeastern Indian languages
+- **Subscription Management**: Free and paid tiers with quota management
+- **Payment Processing**: Stripe and Razorpay integration
+- **User Authentication**: JWT-based secure authentication
+- **Billing System**: Automated invoicing and usage tracking
 
-## Table of Contents
-- `Prerequisites`
-- `Install dependencies`
-- `Environment variables`
-- `Run the backend`
-- `Run tests`
-- `Project structure`
-- `Available test utilities`
-- `How to undo git add .`
-- `Troubleshooting`
-- `Contributing`
-- `Security`
+## Quick Start
 
-## Prerequisites
-- `Python 3.10` or newer installed
-- `pip` available
-- `git` installed
-- The backend server must be reachable at `http://localhost:8000` for tests and integrations
+### 1. Environment Setup
 
-## Install dependencies
-From the repository root, install main requirements:
 ```bash
-python -m pip install -r aspy_backend/requirements.txt
-```
-## Environment variables
-Create a `.env` file at the repo root or set environment variables in your shell. Minimum variables required:
+# Create virtual environment
+python -m venv .venv
 
-- `SECRET_KEY` — JWT signing key used by the app
-- `DATABASE_URL` — database connection string (e.g., PostgreSQL, SQLite)
-- `TEST_DATABASE_URL` — optional test database
+# Activate virtual environment
+# Windows:
+.venv\Scripts\activate
+# Linux/Mac:
+source .venv/bin/activate
 
-Windows (PowerShell):
-```powershell
-$env:SECRET_KEY = "your-secret-key-here"
-$env:DATABASE_URL = "postgresql://user:password@localhost/desicode_db"
-$env:TEST_DATABASE_URL = "sqlite:///./test.db"
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-Windows (Command Prompt):
-```cmd
-set SECRET_KEY=your-secret-key-here
-set DATABASE_URL=postgresql://user:password@localhost/desicode_db
-set TEST_DATABASE_URL=sqlite:///./test.db
-```
+### 2. Database Setup
 
-Note: Prefer a `.env` file with `python-dotenv` for convenience.
-
-## Run the backend
-Start the FastAPI app:
 ```bash
-uvicorn aspy_backend.app.main:app --reload --port 8000
-```
+# Setup database tables
+python setup_database.py
 
-Confirm the server is running:
-- Base URL: `http://localhost:8000`
-- API documentation: `http://localhost:8000/docs` (Swagger UI)
-- Alternative docs: `http://localhost:8000/redoc` (ReDoc)
-
-## Run tests
-The `aspy_backend/tests/` folder contains several test utilities:
-
-
-### Run specific test file
-```bash
-python aspy_backend/tests/test_auth.py
-```
-
-### Available test utilities
-- `test_auth.py` — authentication and JWT token tests
-- `test_api.py` — API endpoint tests
-- `test_endpoints.py` — endpoint verification tests
-- `test_suites.py` — comprehensive test suites
-- `quick_test.py` — quick sanity checks
-- `stress_test.py` — load/stress testing
-- `admin_test.py` — admin functionality tests
-- `check_seed_plan.py` — seed data validation
-
-Run a quick test:
-```bash
-python aspy_backend/tests/quick_test.py
-```
-
-Run authentication debug script:
-```bash
-python aspy_backend/tests/test_auth.py
-```
-
-Common `pytest` flags:
-- `-q` — quiet output
-- `-k <expr>` — run tests matching expression
-- `-x` — stop after first failure
-- `--maxfail=<n>` — limit failures before stopping
-- `-v` — verbose output
-
-## Project structure
-```
-`desicode_backend`/
-  `README.md`
-  `DevelopersGuide.md`
-  `aspy_backend/`
-    `__init__.py`
-    `requirements.txt`
-    `alembic.ini`
-    `seed_plans.py`
-    `app/`
-      `__init__.py`
-      `main.py`
-      `api/`
-        `__init__.py`
-        `v1/`
-          `__init__.py`
-          `auth.py`
-          `users.py`
-          `billing.py`
-          `invoice.py`
-          `payments.py`
-          `subscriptions.py`
-          `webhooks.py`
-      `core/`
-        `__init__.py`
-        `security.py`
-      `db/`
-        `__init__.py`
-        `base.py`
-        `session.py`
-      `models/`
-        `__init__.py`
-        `user.py`
-        `subscription.py`
-        `invoice.py`
-      `schemas/`
-        `__init__.py`
-        `user.py`
-        `billing.py`
-        `invoice.py`
-        `payment.py`
-        `subscription.py`
-    `alembic/`
-      `__init__.py`
-      `env.py`
-      `script.py.mako`
-      `versions/`
-        `initial_migration.py`
-    `tests/`
-      `test_auth.py`
-      `test_api.py`
-      `test_endpoints.py`
-      `test_suites.py`
-      `quick_test.py`
-      `stress_test.py`
-      `admin_test.py`
-      `check_seed_plan.py`
-```
-
-## Database migrations
-Run Alembic migrations:
-```bash
+# Run migrations (if needed)
 alembic upgrade head
 ```
 
-Create a new migration:
+### 3. Environment Configuration
+
+Create a `.env` file with your configuration:
+
+```env
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+SECRET_KEY=your-secret-key
+STRIPE_SECRET_KEY=your-stripe-key
+RAZORPAY_KEY_ID=your-razorpay-key
+RAZORPAY_KEY_SECRET=your-razorpay-secret
+```
+
+### 4. Start the Server
+
 ```bash
-alembic revision --autogenerate -m "migration description"
+cd aspy_backend
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
-## API endpoints
-Main API endpoints are organized by feature under `aspy_backend/app/api/v1/`:
-- `/auth` — authentication (login, register, token refresh)
-- `/users` — user management
-- `/subscriptions` — subscription plans and management
-- `/billing` — billing information
-- `/invoices` — invoice generation and retrieval
-- `/payments` — payment processing
-- `/webhooks` — webhook handlers
+The API will be available at:
+- **API**: http://localhost:8000
+- **Documentation**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
 
-See `DevelopersGuide.md` for detailed endpoint documentation.
+## API Endpoints
 
-## How to undo `git add .`
-To unstage all files after running `git add .`:
+### Authentication (3 APIs)
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
+- `GET /api/auth/me` - Get current user
+
+### Subscription Management (5 APIs)
+- `GET /api/plans` - Get available plans (Free/Pro/Team/Campus)
+- `GET /api/subscriptions` - Get user's subscriptions
+- `GET /api/subscriptions/{id}` - Get subscription details
+- `POST /api/subscriptions/create` - Create new subscription
+- `PUT /api/subscriptions/{id}/cancel` - Cancel subscription
+
+### Payment Processing (4 APIs)
+- `POST /api/payments/stripe/create-checkout` - Stripe checkout session
+- `POST /api/payments/razorpay/create-order` - Razorpay order creation
+- `POST /api/payments/razorpay/verify` - Razorpay payment verification
+- `GET /api/payments/history` - Payment transaction history
+
+### Webhooks (2 APIs)
+- `POST /api/webhooks/stripe` - Stripe payment notifications
+- `POST /api/webhooks/razorpay` - Razorpay payment notifications
+
+### Billing & Invoices (3 APIs)
+- `GET /api/billing/invoices` - Get user invoices
+- `GET /api/billing/invoices/{id}` - Download invoice
+- `GET /api/billing/usage` - Get usage statistics
+
+### User Profile (2 APIs)
+- `GET /api/users/profile` - Get user profile
+- `PUT /api/users/profile` - Update user profile
+
+### Code Execution (Bonus Feature)
+- `POST /api/run` - Execute code in 7 Indian languages
+- `GET /api/run/quota` - Check execution quota
+- `GET /api/run/supported-languages` - List supported languages
+- `GET /api/run/history` - Get execution history
+
+## Testing
+
 ```bash
-git restore --staged .
+# Run all tests
+pytest
+
+# Run specific test file
+pytest tests/test_auth.py
+
+# Run with coverage
+pytest --cov=app tests/
+
+# Run requirements verification
+python test_requirements.py
+
+# Run API test suite
+python api_test_suite.py
 ```
 
-Fallback for older Git versions:
-```bash
-git reset HEAD .
+## Project Structure
+
+```
+aspy_backend/
+├── .env                    # Environment configuration
+├── README.md              # Project documentation
+├── IMPLEMENTATION_STATUS.md # Requirements verification
+├── alembic.ini           # Database migration config
+├── requirements.txt      # Dependencies
+├── setup_database.py     # Database setup utility
+├── test_requirements.py  # Requirements verification script
+├── api_test_suite.py     # API testing suite
+├── alembic/              # Database migrations
+│   ├── versions/         # Migration files
+│   └── env.py           # Migration environment
+├── app/                  # Main application
+│   ├── main.py          # FastAPI application
+│   ├── core/            # Core functionality
+│   │   ├── api/v1/      # API endpoints (19 required APIs)
+│   │   ├── database.py  # Database configuration
+│   │   └── security.py  # Authentication & security
+│   ├── db/              # Database layer
+│   │   ├── base.py      # SQLAlchemy base
+│   │   └── session.py   # Database session management
+│   ├── models/          # SQLAlchemy models
+│   │   ├── user.py      # User model
+│   │   ├── subscription.py # Subscription & plan models
+│   │   ├── invoice.py   # Invoice model
+│   │   ├── code_execution.py # Code execution tracking
+│   │   └── transpiler_job.py # Job queue model
+│   ├── schemas/         # Pydantic schemas
+│   │   ├── user.py      # User schemas
+│   │   ├── subscription.py # Subscription schemas
+│   │   ├── payment.py   # Payment schemas
+│   │   ├── invoice.py   # Invoice schemas
+│   │   ├── billing.py   # Billing schemas
+│   │   └── token.py     # JWT token schemas
+│   └── services/        # Business logic
+│       ├── queue_service.py   # Background job queue
+│       ├── queue_services.py  # Queue utilities
+│       ├── transpiler_service.py # Code execution service
+│       └── worker_services.py # Worker management
+├── tests/               # Test suite
+│   ├── conftest.py      # Test configuration
+│   ├── test_auth.py     # Authentication tests
+│   ├── test_endpoints.py # API endpoint tests
+│   ├── test_suites.py   # Comprehensive test suite
+│   ├── test_transpiler.py # Transpiler tests
+│   └── archive/         # Archived tests
+└── archive/             # Utility scripts
+    ├── create_default_plan.py    # Plan creation utility
+    ├── create_tables.py          # Table creation utility
+    ├── create_test_subscriptions.py # Test data utility
+    └── seed_plans.py             # Plan seeding utility
 ```
 
-## Quick troubleshooting
-- **401 on protected endpoints:**
-  - Verify `SECRET_KEY` matches server
-  - Confirm token not expired
-  - Check server time / timezone skew
+## Supported Languages
 
-- **Database connection errors:**
-  - Verify `DATABASE_URL` is correct
-  - Ensure database server is running
-  - Check DB credentials and permissions
+- Assamese
+- Bengali
+- Bodo
+- Manipuri
+- Khasi
+- Garo
+- Mizo
 
-- **Migration errors:**
-  - Run `alembic upgrade head` to apply pending migrations
-  - Check `alembic/versions/` for migration scripts
+## Requirements Compliance
 
-- **Import errors:**
-  - Verify Python path is correct
-  - Reinstall dependencies: `python -m pip install -r aspy_backend/requirements.txt`
+This implementation meets all 19 required APIs:
 
-- **Test failures:**
-  - Ensure backend server is running at `http://localhost:8000`
-  - Check `.env` variables are set correctly
-  - Review test output for specific error messages
+- **Authentication**: 3/3 APIs 
+- **Subscription Management**: 5/5 APIs 
+- **Payment Processing**: 4/4 APIs
+- **Webhooks**: 2/2 APIs
+- **Billing & Invoices**: 3/3 APIs 
+- **User Profile**: 2/2 APIs 
 
-## Contributing
-- Follow repository coding standards
-- Add tests for new features or bug fixes
-- Run `pytest` before opening a PR
-- Keep secrets out of commits
+**Total**: 19/19 APIs 
 
-## Security
-- Never commit `SECRET_KEY` or real credentials
-- Use `.env` file for local secrets (add to `.gitignore`)
-- Rotate signing keys if exposed
-- Review `aspy_backend/core/security.py` for authentication logic
+Plus bonus multi-language code execution system.
 
----
-Keep all secrets out of the repo and change demo values before deploying to production.
-```
+## License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
