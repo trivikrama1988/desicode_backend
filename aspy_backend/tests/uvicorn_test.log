@@ -1,0 +1,11 @@
+C:\Users\rdash\PycharmProjects\desicode_backend\.venv1\Lib\site-packages\razorpay\client.py:4: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+Redis not available, using in-memory queue: Timeout connecting to server
+INFO:     Started server process [2384]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:58510 (Press CTRL+C to quit)
+[OK] Successfully imported API router
+[OK] API router included with prefix /api
+INFO:     127.0.0.1:58516 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58518 - "GET /api/run/supported-languages HTTP/1.1" 200 OK
